@@ -51,52 +51,50 @@ def possibilities(board):
 def smart_place(board, player):
     possible_moves = possibilities(board)
 
-    next_moves = []
+    best_score = -2187
+    best_move = None
+    depth = 0
     for move in possible_moves:
-
         board[move] = player
-        best_score = minimax(board, player)
+        score = minimax(board, player, depth)
         board[move] = EMPTY_FIELD
 
-        if best_score > 0:
-            next_moves = [move]
-            break
-        elif best_score == 0:
-            next_moves.append(move)
+        if score > best_score:
+            best_score = score
+            best_move = move
 
-    if len(next_moves) > 0:
-        board[random.choice(next_moves)] = player
-    else:
-        board[random.choice(possible_moves)] = player
+    board[best_move] = player
 
     return board
 
 
-def minimax(board, player):
+def minimax(board, player, depth):
+    depth += 3
+
     winner = evaluate(board)
     if winner != 0:
         if winner == FIRST_PLAYER:
-            return -1
+            return depth - 243
         elif winner == SECOND_PLAYER:
-            return +1
+            return 243 - depth
         else:
             return 0
 
     possible_moves = possibilities(board)
     if player == FIRST_PLAYER:
-        best_score = -1
+        best_score = 2187
         for move in possible_moves:
             board[move] = player
-            best_score = max(best_score, minimax(board, change_player(player)))
+            best_score = min(best_score, minimax(board, change_player(player), depth))
             board[move] = EMPTY_FIELD
 
         return best_score
 
     if player == SECOND_PLAYER:
-        best_score = +1
+        best_score = -2187
         for move in possible_moves:
             board[move] = player
-            best_score = min(best_score, minimax(board, change_player(player)))
+            best_score = max(best_score, minimax(board, change_player(player), depth))
             board[move] = EMPTY_FIELD
 
         return best_score
@@ -125,7 +123,10 @@ def evaluate(board):
     winner = 0
 
     for player in [FIRST_PLAYER, SECOND_PLAYER]:
-        if row_win(board, player) or col_win(board, player) or diag_win(board, player):
+        if row_win(board, player) or \
+                col_win(board, player) or \
+                main_diag_win(board, player) or \
+                anti_diag_win(board, player):
             winner = player
 
     if np.all(board != EMPTY_FIELD) and winner == 0:
@@ -164,12 +165,26 @@ def col_win(board, player):
     return win
 
 
-def diag_win(board, player):
+def main_diag_win(board, player):
     win = True
 
     for x in range(len(board)):
         if board[x, x] != player:
             win = False
+            break
+
+    return win
+
+
+def anti_diag_win(board, player):
+    win = True
+
+    for x in range(len(board)):
+        for y in range(len(board)):
+            if x == len(board) - y - 1:
+                if board[x, y] != player:
+                    win = False
+                    break
 
     return win
 
@@ -203,7 +218,7 @@ def main():
                 if player == FIRST_PLAYER:
                     board = make_move(board, player, rnd=True)
                 elif player == SECOND_PLAYER:
-                    board = make_move(board, player)
+                    board = make_move(board, player, rnd=False)
                 # print_board(board)
 
                 winner = evaluate(board)
@@ -227,6 +242,5 @@ def main():
     print("Nobody won {:f}".format((nobody / float(rounds)) * 100))
 
 
-# TODO: Scoring issues.
 if __name__ == '__main__':
     main()
