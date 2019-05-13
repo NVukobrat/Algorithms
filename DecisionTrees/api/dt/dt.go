@@ -7,7 +7,7 @@ import (
 )
 
 //
-// Node structure of the Decision Tree.
+// Node of the Decision Tree.
 //
 type Node struct {
 	Index     int           `json:"index"`      // Node index.
@@ -20,20 +20,24 @@ type Node struct {
 }
 
 //
-// BuildTree ...
+// Build constructs Decision Tree by determining the best
+// possible root decision node. When that is successfully compleated,
+// it builds up recursively rest of the tree, node by node with
+// its leafs at the end of tree. Leaf (or terminal) nodes represent
+// predicted classes of the build up Decision Tree.
 //
-func BuildTree(dataset [][]float64, maxDepth, minSize int) Node {
-	rootNode := getSplit(dataset)
-	split(rootNode, maxDepth, minSize, 1)
+func Build(dataset [][]float64, maxDepth, minSize int) Node {
+	rootNode := bestSplit(dataset)
+	nodeSplit(rootNode, maxDepth, minSize, 1)
 
 	return *rootNode
 }
 
 //
-// getSplit algorithm looks for the best possible candidate for split.
+// bestSplit looks for the best possible candidate for split.
 // Once best split is found, it can be used as node of the tree.
 //
-func getSplit(dataset [][]float64) *Node {
+func bestSplit(dataset [][]float64) *Node {
 	classes := []float64{}
 	for _, row := range dataset {
 		classes = appendIfMissing(classes, row[len(row)-1])
@@ -42,7 +46,7 @@ func getSplit(dataset [][]float64) *Node {
 	bestIndex, bestValue, bestScore, bestGroups := 999, 999.0, 999.0, [][][]float64{}
 	for index := 0; index < len(dataset[0])-1; index++ {
 		for _, row := range dataset {
-			groups := testSplit(index, row[index], dataset)
+			groups := groupDivide(index, row[index], dataset)
 			gini := giniIndex(groups, classes)
 			// fmt.Printf("X%d < %.3f Gini=%.3f\n", index+1, row[index], gini)
 
@@ -55,10 +59,49 @@ func getSplit(dataset [][]float64) *Node {
 	return &Node{Index: bestIndex, Value: bestValue, Groups: bestGroups}
 }
 
+func appendIfMissing(slice []float64, i float64) []float64 {
+	for _, ele := range slice {
+		if ele == i {
+			return slice
+		}
+	}
+	return append(slice, i)
+}
+
 //
-// split ...
+// groupDivide splits dataset in two list of rows giving the index
+// and the value of the attribute. Having those two groups, gini
+// score could be calculated for given attribute.
 //
-func split(node *Node, maxDepth, minSize, depth int) {
+func groupDivide(index int, value float64, dataset [][]float64) [][][]float64 {
+	left, right := [][]float64{}, [][]float64{}
+
+	for _, row := range dataset {
+		if row[index] < value {
+			left = append(left, row)
+		} else {
+			right = append(right, row)
+		}
+	}
+
+	return [][][]float64{left, right}
+}
+
+//
+// nodeSplit recursively build up tree using root node as a
+// reference. It uses left and right node groups
+// to determine will current node will be used as new nodeSplit
+// or it will represent terminal (leaf) node with defined
+// arguments.
+//
+// Provided arguments are used to determine what is the max
+// allowed depth (maxDepth) for constructing tree. Also,
+// what is the minimal leaf size (minSize) to end further
+// splitting of decision nodes.
+//
+//
+//
+func nodeSplit(node *Node, maxDepth, minSize, depth int) {
 	left, right := node.Groups[0], node.Groups[1]
 	node.Groups = [][][]float64{}
 
@@ -77,20 +120,22 @@ func split(node *Node, maxDepth, minSize, depth int) {
 	if len(left) <= minSize {
 		node.LeftVal = terminalNode(left)
 	} else {
-		node.LeftNode = getSplit(left)
-		split(node.LeftNode, maxDepth, minSize, depth+1)
+		node.LeftNode = bestSplit(left)
+		nodeSplit(node.LeftNode, maxDepth, minSize, depth+1)
 	}
 
 	if len(right) <= minSize {
 		node.RightVal = terminalNode(right)
 	} else {
-		node.RightNode = getSplit(right)
-		split(node.RightNode, maxDepth, minSize, depth+1)
+		node.RightNode = bestSplit(right)
+		nodeSplit(node.RightNode, maxDepth, minSize, depth+1)
 	}
 }
 
 //
-// terminalNode ...
+// terminalNode determines which class group has statistically
+// the greatest likelihood to be the leaf of the current
+// decision node.
 //
 func terminalNode(group [][]float64) float64 {
 	classesCount := make(map[float64]int)
@@ -160,36 +205,9 @@ func giniIndex(groups [][][]float64, classes []float64) float64 {
 	return giniScore
 }
 
-func appendIfMissing(slice []float64, i float64) []float64 {
-	for _, ele := range slice {
-		if ele == i {
-			return slice
-		}
-	}
-	return append(slice, i)
-}
-
 //
-// testSplit splits dataset in two list of rows giving the index
-// and the value of the attribute. Having those two groups, gini
-// score could be calculated for given attribute.
-//
-func testSplit(index int, value float64, dataset [][]float64) [][][]float64 {
-	left, right := [][]float64{}, [][]float64{}
-
-	for _, row := range dataset {
-		if row[index] < value {
-			left = append(left, row)
-		} else {
-			right = append(right, row)
-		}
-	}
-
-	return [][][]float64{left, right}
-}
-
-//
-// Print ...
+// Print outputs constructed Decision Tree to the stdout
+// with node decisions adn leaf classes.
 //
 func (node *Node) Print(depth int) {
 	fmt.Printf("%s[X%d < %.3f]\n", strings.Repeat(" ", depth), (node.Index + 1), (node.Value))
@@ -213,7 +231,9 @@ func (node *Node) Print(depth int) {
 }
 
 //
-// Predict ...
+// Predict propagate attributes of the dataset row by row through
+// the Decision Tree. At the end, when terminal (leaf) node is meet,
+// it returns adequate prediction with as terminal node value.
 //
 func (node *Node) Predict(row []float64) float64 {
 	if row[node.Index] < node.Value {

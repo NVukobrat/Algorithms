@@ -8,6 +8,7 @@ import (
 
 func main() {
 
+	// Dataset example.
 	dataset := [][]float64{
 		[]float64{2.771244718, 1.784783929, 0},
 		[]float64{1.728571309, 1.169761413, 0},
@@ -21,9 +22,13 @@ func main() {
 		[]float64{6.642287351, 3.319983761, 1},
 	}
 
-	tree := dt.BuildTree(dataset, 9, 1)
+	// Build Decision Tree.
+	tree := dt.Build(dataset, 9, 1)
+
+	// Print constructed Decision Tree.
 	tree.Print(0)
 
+	// Give prediction for each row of the dataset.
 	for _, row := range dataset {
 		prediction := tree.Predict(row)
 		fmt.Printf("Expected=%.0f, Got=%.0f\n", row[len(row)-1], prediction)
