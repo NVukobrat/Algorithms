@@ -34,16 +34,34 @@ type Node struct {
 // Out of this comes Random within the name.
 //
 //
-func Build(dataset [][]float64, maxDepth, minSize, treeNum, featureNum int) []Node {
-	trees := []Node{}
+func Build(dataset [][]float64, maxDepth, minSize, treeNum, featureNum int, sampleRation float64) []Node {
+	var trees []Node
 
 	for i := 0; i < treeNum; i++ {
-		//TODO: Use sample of dataset, not whole for each tree.
-		tree := buildDecisionTree(dataset, maxDepth, minSize, featureNum)
+		sample := datasetSubSample(dataset, sampleRation)
+		tree := buildDecisionTree(sample, maxDepth, minSize, featureNum)
 		trees = append(trees, tree)
 	}
 
 	return trees
+}
+
+//
+// datasetSubSample randomly selects samples out of dataset
+// until sample ration (size) is satisfied. Output is shuffled
+// sub dataset smaller or equal to the original dataset.
+//
+func datasetSubSample(dataset [][]float64, ratio float64) [][]float64 {
+	var sample [][]float64
+
+	sampleSize := int(float64(len(dataset)) * ratio)
+
+	for len(sample) < sampleSize {
+		index := rand.Intn(sampleSize)
+		sample = append(sample, dataset[index])
+	}
+
+	return sample
 }
 
 //
@@ -55,7 +73,7 @@ func Build(dataset [][]float64, maxDepth, minSize, treeNum, featureNum int) []No
 //
 func buildDecisionTree(dataset [][]float64, maxDepth, minSize, featureNum int) Node {
 	rootNode := bestSplit(dataset, featureNum)
-	nodeSplit(rootNode, maxDepth, minSize, 1)
+	nodeSplit(rootNode, maxDepth, minSize, featureNum, 1)
 
 	return *rootNode
 }
@@ -65,22 +83,22 @@ func buildDecisionTree(dataset [][]float64, maxDepth, minSize, featureNum int) N
 // Once best split is found, it can be used as node of the tree.
 //
 func bestSplit(dataset [][]float64, featureNum int) *Node {
-	classes := []float64{}
+	var classes []float64
 	for _, row := range dataset {
 		classes = appendIfMissing(classes, row[len(row)-1])
 	}
 
-	features := []int{}
+	var features []int
 	for len(features) < featureNum {
-		
+
 		index := rand.Intn(len(dataset[0]) - 1)
-		if !intInSlice(index, features) {
-			features = append(features, index)			
+		if !intIsInTheList(index, features) {
+			features = append(features, index)
 		}
 	}
-	//TODO: Continue
+
 	bestIndex, bestValue, bestScore, bestGroups := 999, 999.0, 999.0, [][][]float64{}
-	for index := 0; index < len(dataset[0])-1; index++ {
+	for index := range features {
 		for _, row := range dataset {
 			groups := groupDivide(index, row[index], dataset)
 			gini := giniIndex(groups, classes)
@@ -104,13 +122,13 @@ func appendIfMissing(slice []float64, i float64) []float64 {
 	return append(slice, i)
 }
 
-func intInSlice(a int, list []int) bool {
-    for _, b := range list {
-        if b == a {
-            return true
-        }
-    }
-    return false
+func intIsInTheList(a int, list []int) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
 }
 
 //
@@ -144,9 +162,7 @@ func groupDivide(index int, value float64, dataset [][]float64) [][][]float64 {
 // what is the minimal leaf size (minSize) to end further
 // splitting of decision nodes.
 //
-//
-//
-func nodeSplit(node *Node, maxDepth, minSize, depth int) {
+func nodeSplit(node *Node, maxDepth, minSize, featureNum, depth int) {
 	left, right := node.Groups[0], node.Groups[1]
 	node.Groups = [][][]float64{}
 
@@ -165,15 +181,15 @@ func nodeSplit(node *Node, maxDepth, minSize, depth int) {
 	if len(left) <= minSize {
 		node.LeftVal = terminalNode(left)
 	} else {
-		node.LeftNode = bestSplit(left)
-		nodeSplit(node.LeftNode, maxDepth, minSize, depth+1)
+		node.LeftNode = bestSplit(left, featureNum)
+		nodeSplit(node.LeftNode, maxDepth, minSize, featureNum, depth+1)
 	}
 
 	if len(right) <= minSize {
 		node.RightVal = terminalNode(right)
 	} else {
-		node.RightNode = bestSplit(right)
-		nodeSplit(node.RightNode, maxDepth, minSize, depth+1)
+		node.RightNode = bestSplit(right, featureNum)
+		nodeSplit(node.RightNode, maxDepth, minSize, featureNum, depth+1)
 	}
 }
 
@@ -250,6 +266,13 @@ func giniIndex(groups [][][]float64, classes []float64) float64 {
 	return giniScore
 }
 
+//
+// BaggingPredict gives best prediction of the forest.
+//
+// Because Random Forest is formed out of many Decision Trees, 
+// bagging prediction does prediction with every single tree and
+// chooses best prediction from them. 
+//
 func BaggingPredict(trees []Node, row []float64) float64 {
 	predictions := []float64{}
 	for _, tree := range trees {
@@ -272,7 +295,7 @@ func BaggingPredict(trees []Node, row []float64) float64 {
 // with node decisions adn leaf classes.
 //
 func (node *Node) Print(depth int) {
-	fmt.Printf("%s[X%d < %.3f]\n", strings.Repeat(" ", depth), (node.Index + 1), (node.Value))
+	fmt.Printf("%s[X%d < %.3f]\n", strings.Repeat(" ", depth), node.Index+1, node.Value)
 
 	if node.LeftNode != nil {
 		node.LeftNode.Print(depth + 1)
